@@ -9,6 +9,8 @@
 - [x] Build guide and setup instructions
 
 ### 2. Networking Layer (100%)
+
+#### Core P2P Networking
 - [x] **NetworkProtocol.swift** - Complete message protocol with all message types
   - Handshake, Auth, VideoFrame, InputEvent, ConfigUpdate, KeepAlive
   - Comprehensive data structures for all event types
@@ -38,6 +40,30 @@
   - Session management with tokens
   - Session expiration
   - Certificate management hooks
+
+#### Signaling Server Integration (NEW! ✨)
+- [x] **SignalingProtocol.swift** - Signaling message protocol
+  - Register, Connect, PeerInfo, Error, Heartbeat messages
+  - Session-based peer discovery
+  - JSON serialization for WebSocket
+
+- [x] **ConnectionMode.swift** - Connection mode management
+  - Signaling, Direct, and Auto modes
+  - Connection state machine
+  - Fallback trigger definitions
+  - Session ID generation
+
+- [x] **SignalingClient.swift** - WebSocket signaling client
+  - URLSessionWebSocketTask implementation
+  - Async/await API
+  - Automatic heartbeat
+  - Error handling and reconnection
+
+- [x] **PeerConnectionManager.swift** - Connection orchestration
+  - Manages both signaling and direct connections
+  - Automatic fallback logic (5s timeout)
+  - State management and metrics
+  - Delegates for event handling
 
 ### 3. Capture Layer (100%)
 - [x] **ScreenCaptureManager.swift** - Screen capture using ScreenCaptureKit
@@ -149,7 +175,7 @@
 
 | Layer | Files Completed | Total Files | Progress |
 |-------|----------------|-------------|----------|
-| Networking | 5/5 | 5 | 100% |
+| Networking | 9/9 | 9 | 100% ✨ |
 | Capture | 2/2 | 2 | 100% |
 | Codec | 3/3 | 3 | 100% |
 | Input Control | 2/4 | 4 | 50% |
@@ -158,7 +184,9 @@
 | Application | 0/6 | 6 | 0% |
 | UI | 0/8 | 8 | 0% |
 | Utilities | 0/4 | 4 | 0% |
-| **TOTAL** | **12/41** | **41** | **29%** |
+| **TOTAL** | **16/45** | **45** | **36%** |
+
+**Recent Update**: Added signaling server integration (+4 files, +1400 LOC)
 
 ## 🎯 CRITICAL PATH TO MVP
 
