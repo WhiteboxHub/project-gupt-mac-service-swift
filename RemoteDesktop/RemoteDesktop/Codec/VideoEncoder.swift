@@ -13,7 +13,7 @@ import os.log
 
 /// Delegate for encoder events
 protocol VideoEncoderDelegate: AnyObject {
-    func encoder(_ encoder: VideoEncoder, didEncodeFrame data: Data, isKeyframe: Bool, presentationTime: CMTime)
+    func encoder(_ encoder: VideoEncoder, didEncodeFrame data: Data, isKeyframe: Bool, sps: Data?, pps: Data?, presentationTime: CMTime)
     func encoder(_ encoder: VideoEncoder, didEncounterError error: Error)
 }
 
@@ -129,21 +129,11 @@ class VideoEncoder {
             value: 0 as CFNumber
         )
 
-        // Use hardware acceleration if available
-        VTSessionSetProperty(
-            session,
-            key: kVTCompressionPropertyKey_EnableHardwareAcceleratedVideoEncoder,
-            value: kCFBooleanTrue
-        )
-
-        // Set priority for low latency
-        VTSessionSetProperty(
-            session,
-            key: kVTCompressionPropertyKey_Priority,
-            value: 0 as CFNumber  // Highest priority
-        )
-
-        logger.info("Encoder configured: \(configuration.bitrate) bps, \(configuration.expectedFrameRate) fps")
+        // Hardware acceleration relies on Apple default for VideoToolbox
+        
+        // Let it determine priority natively by omitting the kVTCompressionPropertyKey_Priority key
+        
+        logger.info("Encoder configured: \(self.configuration.bitrate) bps, \(self.configuration.expectedFrameRate) fps")
     }
 
     /// Invalidate encoding session
@@ -261,7 +251,7 @@ class VideoEncoder {
         let isKeyframe = !flags.contains(.frameDropped) && sampleBuffer.isKeyframe
 
         // Extract encoded data
-        guard let data = extractEncodedData(from: sampleBuffer) else {
+        guard let (data, sps, pps) = extractEncodedData(from: sampleBuffer, isKeyframe: isKeyframe) else {
             logger.error("Failed to extract encoded data")
             return
         }
@@ -269,10 +259,10 @@ class VideoEncoder {
         let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
         // Notify delegate
-        delegate?.encoder(self, didEncodeFrame: data, isKeyframe: isKeyframe, presentationTime: presentationTime)
+        delegate?.encoder(self, didEncodeFrame: data, isKeyframe: isKeyframe, sps: sps, pps: pps, presentationTime: presentationTime)
     }
 
-    private func extractEncodedData(from sampleBuffer: CMSampleBuffer) -> Data? {
+    private func extractEncodedData(from sampleBuffer: CMSampleBuffer, isKeyframe: Bool) -> (Data, Data?, Data?)? {
         guard let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
             return nil
         }
@@ -292,7 +282,35 @@ class VideoEncoder {
             return nil
         }
 
-        return Data(bytes: pointer, count: length)
+        let avccData = Data(bytes: pointer, count: length)
+        var spsData: Data? = nil
+        var ppsData: Data? = nil
+        
+        // 1. If keyframe, extract SPS and PPS
+        if isKeyframe, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
+            var count: Int = 0
+            CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDesc, parameterSetIndex: 0, parameterSetPointerOut: nil, parameterSetSizeOut: nil, parameterSetCountOut: &count, nalUnitHeaderLengthOut: nil)
+            
+            for i in 0..<count {
+                var parameterSetPointer: UnsafePointer<UInt8>?
+                var parameterSetSize: Int = 0
+                let status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+                    formatDesc,
+                    parameterSetIndex: i,
+                    parameterSetPointerOut: &parameterSetPointer,
+                    parameterSetSizeOut: &parameterSetSize,
+                    parameterSetCountOut: nil,
+                    nalUnitHeaderLengthOut: nil
+                )
+                
+                if status == noErr, let paramPtr = parameterSetPointer {
+                    let d = Data(bytes: paramPtr, count: parameterSetSize)
+                    if i == 0 { spsData = d } else if i == 1 { ppsData = d }
+                }
+            }
+        }
+
+        return (avccData, spsData, ppsData)
     }
 
     // MARK: - Statistics

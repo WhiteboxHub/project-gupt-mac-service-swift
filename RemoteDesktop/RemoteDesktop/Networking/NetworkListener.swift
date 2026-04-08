@@ -46,22 +46,23 @@ class NetworkListener {
             return
         }
 
-        let parameters: NWParameters
-        if useTLS {
-            parameters = configureTLSParameters()
-        } else {
-            parameters = .tcp
-        }
-
         // Configure TCP options
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.noDelay = true
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveInterval = 5
-        parameters.defaultProtocolStack.transportProtocol = tcpOptions
+
+        let parameters: NWParameters
+        if useTLS {
+            parameters = configureTLSParameters()
+            // We shouldn't overwrite the TLS transport here manually unless done during setup
+        } else {
+            parameters = NWParameters(tls: nil, tcp: tcpOptions)
+        }
 
         // Allow local and peer-to-peer connections
         parameters.acceptLocalOnly = false
+        parameters.allowLocalEndpointReuse = true
         parameters.allowLocalEndpointReuse = true
 
         do {
@@ -120,8 +121,8 @@ class NetworkListener {
         logger.info("New connection from \(String(describing: nwConnection.endpoint))")
 
         Task {
-            let connection = await NetworkConnection(connection: nwConnection)
-            connection.start()
+            let connection = NetworkConnection(connection: nwConnection)
+            // Connection should be started by the delegate after assignment
             delegate?.listener(self, didAcceptConnection: connection)
         }
     }
